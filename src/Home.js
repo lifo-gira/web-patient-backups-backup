@@ -45,7 +45,7 @@ const Home = () => {
 
 
     // useEffect(() => {
-    //     const socket = new WebSocket(`wss:/api-h5zs.onrender.com/ws`);
+    //     const socket = new WebSocket(`wss:/api-backup-vap2.onrender.com/ws`);
     //     // console.log("socket",socket)
     //     socket.onmessage = (event) => {
     //       console.log(event, "event")
