@@ -11,7 +11,7 @@ function CreateUser() {
   const [status, setStatus] = useState();
 
   useEffect(() => {
-    fetch("https://api-h5zs.onrender.com/get-all-user/doctor")
+    fetch("https://api-backup-vap2.onrender.com/get-all-user/doctor")
       .then((res) => res.json())
       .then((data) => setDoctors(data));
 
