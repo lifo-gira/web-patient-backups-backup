@@ -35,7 +35,7 @@ const Live = () => {
   };
 
   async function fetchData() {
-    fetch(`https://api-h5zs.onrender.com/get-user/patient/${userId}`)
+    fetch(`https://api-backup-vap2.onrender.com/get-user/patient/${userId}`)
       .then((res) => res.json())
       .then((data) => {
         setPatient(data);
