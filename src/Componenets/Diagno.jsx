@@ -255,7 +255,7 @@ const Diagno = () => {
     updateChart();
 
     // Create a new WebSocket connection when starting the chart
-    const newSocket = new WebSocket(`wss:/api-h5zs.onrender.com/ws`);
+    const newSocket = new WebSocket(`wss:/api-backup-vap2.onrender.com/ws`);
     newSocket.onmessage = (event) => {
       // console.log(event, "event");
       const newData = JSON.parse(event.data);
