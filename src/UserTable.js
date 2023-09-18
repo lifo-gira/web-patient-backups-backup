@@ -5,7 +5,7 @@ import Dashboard from "./Dashboard";
 const UserTable = ({switchToDash, setUserId}) => {
   const [users, setusers] = useState([]);
   useEffect(() => {
-    fetch("https://api-h5zs.onrender.com/get-all-user/patient")
+    fetch("https://api-backup-vap2.onrender.com/get-all-user/patient")
       .then((res) => res.json())
       .then((data) => setusers(data));
      console.log(users)
