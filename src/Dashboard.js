@@ -59,7 +59,7 @@ const Dashboard = ({ height, userId }) => {
   };
 
   async function sereiesMetrics(data) {
-    const response = await fetch("https://api-h5zs.onrender.com/metrics", {
+    const response = await fetch("https://api-backup-vap2.onrender.com/metrics", {
       method: "POST",
       cache: "no-cache",
       headers: {
@@ -71,7 +71,7 @@ const Dashboard = ({ height, userId }) => {
   }
 
   async function fetchMetrics(data) {
-    const response = await fetch("https://api-h5zs.onrender.com/metrics", {
+    const response = await fetch("https://api-backup-vap2.onrender.com/metrics", {
       method: "POST",
       cache: "no-cache",
       headers: {
@@ -90,7 +90,7 @@ const Dashboard = ({ height, userId }) => {
   }, [metrics]);
 
   useEffect(() => {
-    fetch(`https://api-h5zs.onrender.com/get-user/patient/${userId}`)
+    fetch(`https://api-backup-vap2.onrender.com/get-user/patient/${userId}`)
       .then((res) => res.json())
       .then((data) => {
         setPatient(data);
