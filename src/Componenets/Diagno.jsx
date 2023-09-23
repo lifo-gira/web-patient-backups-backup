@@ -47,7 +47,7 @@ const Diagno = () => {
   // const [isRunning, setIsRunning] = useState(false);
   const [key, setKey] = useState(0);
   var flag = 0;
-
+  const userId = user.user_id
   localStorage.setItem("lastCount", metricArray.length);
   const [data, setData] = useState([]);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
@@ -246,6 +246,7 @@ const Diagno = () => {
       setIsBluetoothConnected(true); // Connected when playing
     }
   };
+// console.log(data,"DATA")
 
   const startTimer = () => {
     setIsPlaying(true);
@@ -255,7 +256,7 @@ const Diagno = () => {
     updateChart();
 
     // Create a new WebSocket connection when starting the chart
-    const newSocket = new WebSocket(`wss:/api-backup-vap2.onrender.com/ws`);
+    const newSocket = new WebSocket(`wss:/api-backup-vap2.onrender.com/ws/${userId}`);
     newSocket.onmessage = (event) => {
       // console.log(event, "event");
       const newData = JSON.parse(event.data);
@@ -279,15 +280,15 @@ const Diagno = () => {
       return metricArray;
     };
     newSocket.onopen = () => {
-      // console.log("Socket open");
+      console.log("Socket open");
     };
     newSocket.onclose = (event) => {
       if (event.wasClean) {
-        // console.log(
-        //   `WebSocket connection closed cleanly, code=${event.code}, reason=${event.reason}`
-        // );
+        console.log(
+          `WebSocket connection closed cleanly, code=${event.code}, reason=${event.reason}`
+        );
       } else {
-        // console.error("WebSocket connection abruptly closed");
+        console.error("WebSocket connection abruptly closed");
       }
     };
 
