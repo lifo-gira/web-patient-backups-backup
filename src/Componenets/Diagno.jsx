@@ -11,6 +11,7 @@ import {
   Line,
   LineChart,
   ResponsiveContainer,
+  Scatter,
   Tooltip,
   XAxis,
   YAxis,
@@ -20,6 +21,7 @@ import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import Live from "./Live";
 import { CountdownCircleTimer } from "react-countdown-circle-timer";
+import RecordRTC from "recordrtc";
 
 const Diagno = () => {
   const navigate = useNavigate();
@@ -36,6 +38,7 @@ const Diagno = () => {
   const [metrics, setMetrics] = useState([]);
   const messagesEndRef = useRef(null);
   const [autoScroll, setAutoScroll] = useState(false);
+  const [selectedTime, setSelectedTime] = useState(''); // State to store the selected time interval
 
   const [metricArray, setmetricArray] = useState([]);
   const dotAppearance = isPlaying ? { fill: "yellow", r: 5 } : { fill: "none" };
@@ -46,14 +49,35 @@ const Diagno = () => {
   const [isStartButtonDisabled, setIsStartButtonDisabled] = useState(false);
   // const [isRunning, setIsRunning] = useState(false);
   const [key, setKey] = useState(0);
+  const [minAngle, setMinAngle] = useState(Number.MAX_SAFE_INTEGER);
+  const [maxAngle, setMaxAngle] = useState(Number.MIN_SAFE_INTEGER);
+  const [prevAngle, setPrevAngle] = useState(null);
+  const [currentAngle, setCurrentAngle] = useState(null);
+  const [minAnglePoint, setMinAnglePoint] = useState(null);
+const [maxAnglePoint, setMaxAnglePoint] = useState(null);
+const [mediaStream, setMediaStream] = useState(null);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const [recordedChunks, setRecordedChunks] = useState([]);
+  const [isRecording, setIsRecording] = useState(false);
   var flag = 0;
-  const userId = user.user_id
+  const userId = user.user_id;
   localStorage.setItem("lastCount", metricArray.length);
   const [data, setData] = useState([]);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   var [counter, setCounter] = useState(-1);
   const timerRef = useRef();
   const [isButtonEnabled, setIsButtonEnabled] = useState(false);
+
+  const timeIntervals = [
+    '1',
+    '1.5',
+    '2',
+  ];
+
+  const handleTimeChange = (event) => {
+    setSelectedTime(event.target.value);
+  };
+
   function showToastMessage() {
     toast.error("No more datas to be found", {
       position: toast.POSITION.TOP_RIGHT,
@@ -108,6 +132,7 @@ const Diagno = () => {
         // showToastMessage();
         flag += 1;
       }
+
       setCounter(counter - 1);
       return;
     }
@@ -118,6 +143,17 @@ const Diagno = () => {
       const newDataPoint = generateNewDataPoint();
 
       if (newDataPoint) {
+        const newAngle = newDataPoint.val;
+        setPrevAngle(currentAngle); // Store the current angle as the previous angle
+        setCurrentAngle(newAngle); // Update the current angle
+        if (newAngle < minAngle) {
+          setMinAngle(newAngle);
+          setMinAnglePoint(newDataPoint); // Set the point for the minimum angle
+        }
+        if (newAngle > maxAngle) {
+          setMaxAngle(newAngle);
+          setMaxAnglePoint(newDataPoint); // Set the point for the maximum angle
+        }
         setCounter((prevCounter) => prevCounter + 1);
         setData((prevData) => [...prevData, newDataPoint]);
         elapsedTime += 1;
@@ -246,9 +282,11 @@ const Diagno = () => {
       setIsBluetoothConnected(true); // Connected when playing
     }
   };
-// console.log(data,"DATA")
+  // console.log(data,"DATA")
 
   const startTimer = () => {
+    startRecording();
+
     setIsPlaying(true);
     setKey((prevKey) => prevKey + 1);
     setCounter(-1);
@@ -256,7 +294,9 @@ const Diagno = () => {
     updateChart();
 
     // Create a new WebSocket connection when starting the chart
-    const newSocket = new WebSocket(`wss:/api-backup-vap2.onrender.com/ws/${userId}`);
+    const newSocket = new WebSocket(
+      `wss:/api-backup-vap2.onrender.com/ws/${userId}`
+    );
     newSocket.onmessage = (event) => {
       // console.log(event, "event");
       const newData = JSON.parse(event.data);
@@ -317,23 +357,25 @@ const Diagno = () => {
   };
 
   const stopTimer = () => {
+
+    stopRecording();
     setIsPlaying(false);
-    
+
     setKey((prevKey) => prevKey + 1);
     handleTimerStop();
     flag = 0;
     setProgress(0); // Reset the progress bar
 
-      setIsTimerRunning(false);
-      clearInterval(timerRef.current);
-      timerRef.current = undefined;
-      setProgress(0);
-      if (socket) {
-        socket.close(1000, "Goodbye, WebSocket!");
-        setSocket(null);
-        setCounter(-1);
-        setmetricArray([]);
-      }
+    setIsTimerRunning(false);
+    clearInterval(timerRef.current);
+    timerRef.current = undefined;
+    setProgress(0);
+    if (socket) {
+      socket.close(1000, "Goodbye, WebSocket!");
+      setSocket(null);
+      setCounter(-1);
+      setmetricArray([]);
+    }
   };
 
   const handleTimerStop = () => {
@@ -352,6 +394,62 @@ const Diagno = () => {
     }
     // Your custom code to run when the timer stops or completes
     // console.log("Timer stopped or completed");
+  };
+
+  const startRecording = () => {
+    setIsPlaying(true); // Start playing the chart
+    navigator.mediaDevices
+      .getDisplayMedia({ video: true })
+      .then((stream) => {
+        const recorder = new RecordRTC(stream, {
+          type: "video",
+        });
+
+        recorder.startRecording();
+
+        setMediaStream(stream);
+        setMediaRecorder(recorder);
+        setIsRecording(true);
+      })
+      .catch((error) => {
+        console.error("Error accessing media devices:", error);
+      });
+  };
+
+  const stopRecording = () => {
+    setIsPlaying(false); // Stop playing the chart
+  
+    if (mediaRecorder) {
+      mediaRecorder.stopRecording(() => {
+        const recordedBlobs = mediaRecorder.getBlob();
+        const blobs = recordedBlobs instanceof Blob ? [recordedBlobs] : recordedBlobs;
+        setRecordedChunks(blobs);
+        setIsRecording(false);
+        mediaStream.getTracks().forEach((track) => track.stop());
+  
+        // Automatically trigger the download
+        const blob = new Blob(blobs, { type: "video/webm" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "recorded-video.webm";
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+      });
+    }
+  };
+  
+
+  const downloadVideo = () => {
+    const blob = new Blob(recordedChunks, { type: "video/webm" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "recorded-video.webm";
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   return (
@@ -516,7 +614,7 @@ const Diagno = () => {
         </div>
 
         {/* Glass Morphic Section */}
-        <div className="w-3/4 h-[85rem] my-8 relative border-1 bg-opacity-30 bg-white shadow-xl backdrop-blur-3xl backdrop-brightness-90 rounded-3xl">
+        <div className="w-3/4 h-[95rem] my-8 relative border-1 bg-opacity-30 bg-white shadow-xl backdrop-blur-3xl backdrop-brightness-90 rounded-3xl">
           {/* Toggle Button (Top Left) */}
           <button
             className={`m-2 flex items-center justify-center w-20 h-20 rounded-full bg-blue-500 text-white ${
@@ -537,6 +635,26 @@ const Diagno = () => {
             ></div>
             <span>{isBluetoothConnected ? "Connected" : "Disconnected"}</span>
           </div>
+          <div className="mb-4">
+      <label htmlFor="timeInterval" className="block text-gray-700 font-bold">
+        Select Time Interval (min):
+      </label>
+      <select
+        id="timeInterval"
+        name="timeInterval"
+        value={selectedTime}
+        onChange={handleTimeChange}
+        className="block w-full mt-2 p-2 border border-gray-300 rounded-md shadow-sm focus:ring focus:ring-blue-200 focus:border-blue-500"
+      >
+        <option value="">Select an interval</option>
+        {timeIntervals.map((interval, index) => (
+          <option key={index} value={interval}>
+            {interval}
+          </option>
+        ))}
+      </select>
+      </div>
+
 
           {/* Graph Import Area (Below) */}
           <div className="mt-0 mx-4">
@@ -550,7 +668,7 @@ const Diagno = () => {
                     <CountdownCircleTimer
                       key={key}
                       isPlaying={isPlaying}
-                      duration={120} // 2 minutes
+                      duration={selectedTime*60} // 2 minutes
                       colors={[["#3c005a"]]}
                       size={230}
                       strokeWidth={8}
@@ -571,12 +689,11 @@ const Diagno = () => {
                       )}
                     </CountdownCircleTimer>
                   </div>
-                </div>
+                </div>
               <div
                 className="flex flex-col items-center justify-start pr-5 rounded w-full h-[900px]"
                 ref={chartRef}
               >
-                
                 <ResponsiveContainer width="100%" height="80%">
                   <LineChart data={data} className={"mx-auto"}>
                     <Tooltip
@@ -639,11 +756,29 @@ const Diagno = () => {
     `}
                   disabled={isPlaying}
                 >
-                  {isPlaying
-                    ? "Cannot Download Chart"
-                    : "Download Chart"}
+                  {isPlaying ? "Cannot Download Chart" : "Download Chart"}
                 </button>
               </div>
+              {prevAngle !== null && currentAngle !== null && (
+                <div className="flex justify-center mt-4">
+                  <div className="mr-4">
+                    <strong>Previous Angle:</strong> {prevAngle.toFixed(2)}°
+                  </div>
+                  <div>
+                    <strong>Current Angle:</strong> {currentAngle.toFixed(2)}°
+                  </div>
+                </div>
+              )}
+              <div className="flex justify-center mt-4">
+                <div className="mr-4">
+                  <strong>Minimum Angle:</strong> {minAngle.toFixed(2)}°
+                </div>
+                <div>
+                  <strong>Maximum Angle:</strong> {maxAngle.toFixed(2)}°
+                </div>
+               
+              </div>
+              
             </div>
           </div>
         </div>

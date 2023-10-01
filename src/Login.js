@@ -7,6 +7,7 @@ import jwt_decode from 'jwt-decode'
 import Cover from './assets/cover.jpg'
 import Google from './assets/googlelogo.png'
 import QR from './assets/qrcode.jpg'
+import Cookies from "js-cookie";
 
 const Login = () => {
   const [userName, setuserName] = useState("");
@@ -62,6 +63,8 @@ const Login = () => {
         if (data == null) {
           setStatus(<h3 className="text-[#bf2f2f]">Invalid Credentials</h3>);
         } else {
+          Cookies.set("isLoggedIn", true);
+          Cookies.set("user", JSON.stringify(data));
           localStorage.setItem("isLoggedIn", true);
           localStorage.setItem("user", JSON.stringify(data));
           // console.log(JSON.stringify(data));
