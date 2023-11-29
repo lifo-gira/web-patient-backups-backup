@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { Suspense, useEffect, useRef, useState } from "react";
 import { FaPlay, FaPause } from "react-icons/fa";
 import classNames from "classnames";
 import Fit from "../assets/fit.jpg";
@@ -6,8 +6,12 @@ import Timer from "../additionals/Timer";
 import Profile from "../assets/profile.jpg";
 import Logo from "../assets/logo.png";
 import { useNavigate } from "react-router-dom";
+import DatePicker from "react-datepicker";
+import TimePicker from "react-time-picker";
 import {
+  CartesianGrid,
   Label,
+  Legend,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -22,8 +26,16 @@ import jsPDF from "jspdf";
 import Live from "./Live";
 import { CountdownCircleTimer } from "react-countdown-circle-timer";
 import RecordRTC from "recordrtc";
+import StaticGraph from "./StaticGraph";
+import { Canvas, useFrame, useLoader } from "@react-three/fiber";
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MathUtils } from "three";
+// Your code using GLTFLoader goes here
+
+import { OrbitControls } from "@react-three/drei";
 
 const Diagno = () => {
+  const temp = [1, 2, 3];
   const navigate = useNavigate();
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBluetoothConnected, setIsBluetoothConnected] = useState(false);
@@ -38,8 +50,11 @@ const Diagno = () => {
   const [metrics, setMetrics] = useState([]);
   const messagesEndRef = useRef(null);
   const [autoScroll, setAutoScroll] = useState(false);
-  const [selectedTime, setSelectedTime] = useState(''); // State to store the selected time interval
-
+  const [selectedTime, setSelectedTime] = useState(""); // State to store the selected time interval
+  const [fromDate, setFromDate] = useState(new Date());
+  const [fromTime, setFromTime] = useState("12:00");
+  const [toDate, setToDate] = useState(new Date());
+  const [toTime, setToTime] = useState("12:00");
   const [metricArray, setmetricArray] = useState([]);
   const dotAppearance = isPlaying ? { fill: "yellow", r: 5 } : { fill: "none" };
   const [chartData, setChartData] = useState(
@@ -49,13 +64,13 @@ const Diagno = () => {
   const [isStartButtonDisabled, setIsStartButtonDisabled] = useState(false);
   // const [isRunning, setIsRunning] = useState(false);
   const [key, setKey] = useState(0);
-  const [minAngle, setMinAngle] = useState(Number.MAX_SAFE_INTEGER);
-  const [maxAngle, setMaxAngle] = useState(Number.MIN_SAFE_INTEGER);
+  const [minAngle, setMinAngle] = useState(180);
+  const [maxAngle, setMaxAngle] = useState(180);
   const [prevAngle, setPrevAngle] = useState(null);
   const [currentAngle, setCurrentAngle] = useState(null);
   const [minAnglePoint, setMinAnglePoint] = useState(null);
-const [maxAnglePoint, setMaxAnglePoint] = useState(null);
-const [mediaStream, setMediaStream] = useState(null);
+  const [maxAnglePoint, setMaxAnglePoint] = useState(null);
+  const [mediaStream, setMediaStream] = useState(null);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [recordedChunks, setRecordedChunks] = useState([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -67,16 +82,22 @@ const [mediaStream, setMediaStream] = useState(null);
   var [counter, setCounter] = useState(-1);
   const timerRef = useRef();
   const [isButtonEnabled, setIsButtonEnabled] = useState(false);
+  const [stackedMetricsArray, setStackedMetricsArray] = useState([]);
+  const timeIntervals = ["1", "1.5", "2"];
+  const [staticFragment, setstaticFragment] = useState([]);
+  const handleFromDateTimeChange = (date, time) => {
+    setFromDate(date);
+    setFromTime(time);
+  };
 
-  const timeIntervals = [
-    '1',
-    '1.5',
-    '2',
-  ];
+  const handleToDateTimeChange = (date, time) => {
+    setToDate(date);
+    setToTime(time);
+  };
 
   const handleTimeChange = (event) => {
     setSelectedTime(event.target.value);
-  };
+  };
 
   function showToastMessage() {
     toast.error("No more datas to be found", {
@@ -88,12 +109,20 @@ const [mediaStream, setMediaStream] = useState(null);
 
   function handleClick() {
     // Call the first function
-    togglePlay();
+    if (selectedTime) {
+      // Toggle the isPlaying state
+      setIsPlaying(!isPlaying);
+      togglePlay();
+      toggleChart();
+    } else {
+      // If no time interval is selected, you can choose to handle it accordingly
+      // For example, show a message to the user or disable the button
+      toast.error("Please select a time interval!")
+    }
 
     // Call the second function
-    toggleChart();
   }
-
+const [legValue,setlegValue] = useState([])
   const generateNewDataPoint = () => {
     // console.log(metricArray, "metricArraygraph");
     // console.log(counter, "counter");
@@ -101,6 +130,9 @@ const [mediaStream, setMediaStream] = useState(null);
     const newIndex = elapsedTime + 1;
     if (counter >= 0 && counter < metricArray.length) {
       const metricItem = metricArray[counter];
+      const legvalue = parseFloat(metricItem.val)
+      const rotationY = (legvalue) * (Math.PI / 180);
+      setTargetRotation([rotationY, 0, 0]);
       if (metricItem && typeof metricItem === "object" && "val" in metricItem) {
         return {
           index: newIndex,
@@ -141,7 +173,6 @@ const [mediaStream, setMediaStream] = useState(null);
       // Only update the chart data if data is available
       if (counter <= metricArray.length) counter = counter + 1;
       const newDataPoint = generateNewDataPoint();
-
       if (newDataPoint) {
         const newAngle = newDataPoint.val;
         setPrevAngle(currentAngle); // Store the current angle as the previous angle
@@ -160,6 +191,7 @@ const [mediaStream, setMediaStream] = useState(null);
         setChartData((prevData) => [...prevData, newDataPoint]);
         setElapsedTime((prevElapsedTime) => prevElapsedTime + 1);
       }
+      
     }
   };
 
@@ -284,8 +316,15 @@ const [mediaStream, setMediaStream] = useState(null);
   };
   // console.log(data,"DATA")
 
+  const formatTime = (date) => {
+    const hours = date.getHours().toString().padStart(2, "0");
+    const minutes = date.getMinutes().toString().padStart(2, "0");
+    const seconds = date.getSeconds().toString().padStart(2, "0");
+    return `${hours}:${minutes}:${seconds}`;
+  };
+
   const startTimer = () => {
-    startRecording();
+    // startRecording();
 
     setIsPlaying(true);
     setKey((prevKey) => prevKey + 1);
@@ -294,28 +333,36 @@ const [mediaStream, setMediaStream] = useState(null);
     updateChart();
 
     // Create a new WebSocket connection when starting the chart
-    const newSocket = new WebSocket(
-      `wss:/api-backup-vap2.onrender.com/ws/${userId}`
-    );
+    const newSocket = new WebSocket(`wss:/api-backup-vap2.onrender.com/ws/${userId}`);
+    const startDateTime = new Date();
+    setStartDate(startDateTime.toLocaleDateString()); // Update startDate
+    setStartTime(formatTime(startDateTime)); // Update startTime
+
+    console.log("WebSocket started at:", startDateTime);
+    console.log("Start Date:", startDateTime.toLocaleDateString());
+    console.log("Start Time:", formatTime(startDateTime));
     newSocket.onmessage = (event) => {
       // console.log(event, "event");
       const newData = JSON.parse(event.data);
       // console.log(newData, "newData");
       const seriesCount = newData.series;
-      // console.log(seriesCount)
       // seriesCount = Updated_data.length
       for (let i = 0; i < seriesCount.length; i += 20) {
         const slice = seriesCount.slice(i, i + seriesCount.length);
-        // console.log(slice);
+        console.log(slice);
+        stackedMetricsArray.push(...slice);
+        console.log(stackedMetricsArray, "STACKED");
         const mappedSlice = slice.map((val, index) => ({
           index: i + index,
           val: parseFloat(val),
         }));
+
         // console.log(mappedSlice)
         metricArray.push(...mappedSlice);
         // console.log(metricArray, "metrics");
         // setmetricArray(mappedSlice)
       }
+
       // console.log(metricArray);
       return metricArray;
     };
@@ -324,9 +371,16 @@ const [mediaStream, setMediaStream] = useState(null);
     };
     newSocket.onclose = (event) => {
       if (event.wasClean) {
+        setTargetRotation([0, 0, 0]);
+        const newData = stackedMetricsArray[stackedMetricsArray.length - 1];
+        setStackedMetricsArray([...stackedMetricsArray, newData]);
+        staticvalue.push(...stackedMetricsArray);
+        console.log(staticvalue, "VALUE");
         console.log(
           `WebSocket connection closed cleanly, code=${event.code}, reason=${event.reason}`
         );
+        const endDate = new Date();
+        console.log("WebSocket closed at:", endDate);
       } else {
         console.error("WebSocket connection abruptly closed");
       }
@@ -357,7 +411,14 @@ const [mediaStream, setMediaStream] = useState(null);
   };
 
   const stopTimer = () => {
+    setTargetRotation([0, 0, 0]);
+    const endDateTime = new Date();
+    setEndDate(endDateTime.toLocaleDateString()); // Update endDate
+    setEndTime(formatTime(endDateTime)); // Update endTime
 
+    console.log("WebSocket closed at:", endDateTime);
+    console.log("Close Date:", endDateTime.toLocaleDateString());
+    console.log("Close Time:", formatTime(endDateTime));
     stopRecording();
     setIsPlaying(false);
 
@@ -397,9 +458,9 @@ const [mediaStream, setMediaStream] = useState(null);
   };
 
   const startRecording = () => {
-    setIsPlaying(true); // Start playing the chart
+    // setIsPlaying(true); // Start playing the chart
     navigator.mediaDevices
-      .getDisplayMedia({ video: true })
+      .getDisplayMedia({ video: true, audio: false })
       .then((stream) => {
         const recorder = new RecordRTC(stream, {
           type: "video",
@@ -418,15 +479,16 @@ const [mediaStream, setMediaStream] = useState(null);
 
   const stopRecording = () => {
     setIsPlaying(false); // Stop playing the chart
-  
+
     if (mediaRecorder) {
       mediaRecorder.stopRecording(() => {
         const recordedBlobs = mediaRecorder.getBlob();
-        const blobs = recordedBlobs instanceof Blob ? [recordedBlobs] : recordedBlobs;
+        const blobs =
+          recordedBlobs instanceof Blob ? [recordedBlobs] : recordedBlobs;
         setRecordedChunks(blobs);
         setIsRecording(false);
         mediaStream.getTracks().forEach((track) => track.stop());
-  
+
         // Automatically trigger the download
         const blob = new Blob(blobs, { type: "video/webm" });
         const url = URL.createObjectURL(blob);
@@ -439,7 +501,6 @@ const [mediaStream, setMediaStream] = useState(null);
       });
     }
   };
-  
 
   const downloadVideo = () => {
     const blob = new Blob(recordedChunks, { type: "video/webm" });
@@ -451,6 +512,182 @@ const [mediaStream, setMediaStream] = useState(null);
     a.click();
     window.URL.revokeObjectURL(url);
   };
+
+  // Date and Time For deletion
+  const [staticvalue, setstaticvalue] = useState([]);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState(new Date());
+  const [startTime, setStartTime] = useState("12:00:00");
+  const [endTime, setEndTime] = useState("13:00:00");
+
+  const handleStartDateChange = (event) => {
+    setStartDate(event.target.value);
+  };
+
+  const handleEndDateChange = (event) => {
+    setEndDate(event.target.value);
+  };
+
+  const handleStartTimeChange = (event) => {
+    setStartTime(event.target.value);
+  };
+
+  const handleEndTimeChange = (event) => {
+    setEndTime(event.target.value);
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    // Convert date and time to ISO format
+    const startDateTime = new Date(`${startDate} ${startTime}`);
+    const endDateTime = new Date(`${endDate} ${endTime}`);
+
+    // Create payload for the delete API
+    const deletePayload = {
+      device_id: "device1", // Add the device_id here
+      start_date: startDateTime.toISOString().split("T")[0],
+      start_time: startTime,
+      end_date: endDateTime.toISOString().split("T")[0],
+      end_time: endTime,
+    };
+    console.log(deletePayload);
+    try {
+      // Send an HTTP request to your delete API endpoint
+      const response = await fetch("https://api-backup-vap2.onrender.com/delete-data", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(deletePayload),
+      });
+      const responseData = await response.text();
+      console.log(responseData);
+      if (response.ok) {
+        // Handle success (e.g., show a success message)
+        toast.success("Data deleted successfully");
+      } else {
+        // Handle error (e.g., show an error message)
+        const errorData = await response.json();
+        toast.error(`Failed to delete data: ${errorData.error}`);
+      }
+    } catch (error) {
+      // Handle network or other errors
+      console.error("Error deleting data:", error);
+      toast.success("Data deleted successfully");
+    }
+  };
+
+  // Static-Graph--with progressbar
+
+  const initialData = {
+    labels: Array.from({ length: staticvalue.length }, (_, index) =>
+      (index + 1).toString()
+    ),
+    datasets: [
+      {
+        name: "Sales of the week",
+        data: staticvalue.map((value) => parseFloat(value)),
+      },
+    ],
+  };
+  // console.log(initialData,"INI")
+  const [isChartVisible, setChartVisibility] = useState(false);
+  const [sdata, setsData] = useState(initialData);
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 6 }); // Initial visible range
+  const [progressbar, setProgressbar] = useState(0); // Progress for the range input
+
+  const handleButtonClick = () => {
+    const maxProgressValue = initialData.labels.length - 6; // Assuming the range is 6
+    setProgressbar(maxProgressValue);
+    updateVisibleRange(0, maxProgressValue + 6); // Assuming updateVisibleRange is a function to update the visible range
+    setChartVisibility(true);
+  };
+  
+
+  const handleProgressChange = (event) => {
+    const progressValue = parseInt(event.target.value, 10);
+    const newStart = progressValue;
+    const newEnd = Math.min(initialData.labels.length - 1, progressValue + 6);
+    updateVisibleRange(newStart, newEnd);
+    setProgressbar(progressValue);
+  };
+
+  const updateVisibleRange = (start, end) => {
+    setVisibleRange({ start, end });
+    const newData = {
+      labels: initialData.labels.slice(start, end + 1),
+      datasets: [
+        {
+          name: initialData.datasets[0].name,
+          data: initialData.datasets[0].data.slice(start, end + 1),
+        },
+      ],
+    };
+    setsData(newData);
+  };
+
+  // Call updateVisibleRange initially to set the initial visible data
+  useEffect(() => {
+    updateVisibleRange(0, 6);
+  }, []);
+
+  // WEBGL
+  const Model = ({ url, position, shouldRotate, setTargetRotation }) => {
+    const gltf = useLoader(GLTFLoader, url);
+    const modelRef = useRef();
+
+    useEffect(() => {
+      if (modelRef.current && shouldRotate) {
+        // Set the initial rotation to the target rotation
+        modelRef.current.rotation.set(
+          targetRotation[0],
+          targetRotation[1],
+          targetRotation[2]
+        );
+      }
+    }, [shouldRotate, targetRotation]);
+  
+    useFrame(() => {
+      if (modelRef.current && shouldRotate) {
+        const { rotation } = modelRef.current;
+    
+        if (rotation) {
+          modelRef.current.rotation.x = MathUtils.lerp(
+            rotation.x !== undefined ? rotation.x : 0,
+            targetRotation[0],
+            0.02  // Adjust the lerp factor for smoother motion
+          );
+          modelRef.current.rotation.y = MathUtils.lerp(
+            rotation.y !== undefined ? rotation.y : 0,
+            targetRotation[1],
+            0.02
+          );
+          modelRef.current.rotation.z = MathUtils.lerp(
+            rotation.z !== undefined ? rotation.z : 0,
+            targetRotation[2],
+            0.02
+          );
+        }
+      }
+    });
+  
+    return (
+      <group ref={modelRef} position={position}>
+        <primitive object={gltf.scene} scale={4} />
+      </group>
+    );
+  };
+  
+
+  const models = [
+    { url: "./legmodel.glb", position: [-0.2, 7, 7.9], shouldRotate: true },
+    { url: "./Thigh.glb", position: [-1.4, 3, 2.8], shouldRotate: false },
+    { url: "./Meter.glb", position: [-1.3, 3, 3], shouldRotate: false },
+  ];
+
+  const [targetRotation, setTargetRotation] = useState([0, 0, 0]);
+
 
   return (
     <>
@@ -516,13 +753,12 @@ const [mediaStream, setMediaStream] = useState(null);
                         <a
                           onClick={() => {
                             setDropdownVisible(!isDropdownVisible);
-                            console.clear();
-                            navigate("/live");
-                            window.location.reload();
+                            // console.clear();
+                            navigate("/static");
                           }}
                           className="block px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 dark:hover:text-white cursor-pointer"
                         >
-                          Live Data
+                          Static Graph
                         </a>
                       </li>
                     </ul> */}
@@ -564,7 +800,7 @@ const [mediaStream, setMediaStream] = useState(null);
         <ToastContainer />
 
         {/* First Section */}
-        <div className="w-full p-12 flex flex-col gap-10 md:flex-row mt-8">
+        <div className="w-full p-10 flex flex-col gap-5 md:flex-row mt-8">
           {/* Left Side (Image Frame) */}
           <div className="w-80 h-72 bg-cyan-200 rounded-2xl shadow-2xl mb-4 md:mb-0">
             <img
@@ -586,7 +822,34 @@ const [mediaStream, setMediaStream] = useState(null);
               <br /> Avoid Lifting your knees too high.
             </p>
           </div>
+          <div style={{ position: "relative", width: "50vw", height: "40vh", display: "flex", justifyContent: "center", alignItems: "center" }}>
+  <Canvas
+    camera={{ position: [-180, 10, 20], fov: 6 }}
+    style={{ width: "40vw", height: "40vh" }}
+  >
+    {models.map((model, index) => (
+      <Model
+        key={index}
+        url={model.url}
+        position={model.position}
+        shouldRotate={model.shouldRotate}
+        setTargetRotation={targetRotation}
+      />
+    ))}
+    <directionalLight position={[10, 10, 0]} intensity={1.5} />
+    <directionalLight position={[-10, 10, 5]} intensity={1} />
+    <directionalLight position={[-10, 20, 0]} intensity={1.5} />
+    <directionalLight position={[0, -10, 0]} intensity={0.25} />
+
+    <OrbitControls
+      enableZoom={false} // Disable zooming
+      enablePan={false} // Disable panning
+      enableRotate={false}
+    />
+  </Canvas>
+</div>
         </div>
+        
 
         {/* Toggle Button */}
         {/* <button
@@ -636,25 +899,28 @@ const [mediaStream, setMediaStream] = useState(null);
             <span>{isBluetoothConnected ? "Connected" : "Disconnected"}</span>
           </div>
           <div className="mb-4">
-      <label htmlFor="timeInterval" className="block text-gray-700 font-bold">
-        Select Time Interval (min):
-      </label>
-      <select
-        id="timeInterval"
-        name="timeInterval"
-        value={selectedTime}
-        onChange={handleTimeChange}
-        className="block w-full mt-2 p-2 border border-gray-300 rounded-md shadow-sm focus:ring focus:ring-blue-200 focus:border-blue-500"
-      >
-        <option value="">Select an interval</option>
-        {timeIntervals.map((interval, index) => (
-          <option key={index} value={interval}>
-            {interval}
-          </option>
-        ))}
-      </select>
-      </div>
-
+            <label
+              htmlFor="timeInterval"
+              className="block text-gray-700 font-bold"
+            >
+              Select Time Interval (min):
+            </label>
+            <select
+              id="timeInterval"
+              name="timeInterval"
+              value={selectedTime}
+              onChange={handleTimeChange}
+              className="block w-full mt-2 p-2 border border-gray-300 rounded-md shadow-sm focus:ring focus:ring-blue-200 focus:border-blue-500"
+            >
+              <option value="">Select an interval</option>
+              {timeIntervals.map((interval, index) => (
+                <option key={index} value={interval}>
+                  {interval}
+                </option>
+              ))}
+            </select>
+                  
+          </div>
 
           {/* Graph Import Area (Below) */}
           <div className="mt-0 mx-4">
@@ -664,32 +930,33 @@ const [mediaStream, setMediaStream] = useState(null);
             <div className="w-full p-2 flex flex-col items-center">
               {/* Same as */}
               <div className="p-0">
-                  <div className="w-full h-64">
-                    <CountdownCircleTimer
-                      key={key}
-                      isPlaying={isPlaying}
-                      duration={selectedTime*60} // 2 minutes
-                      colors={[["#3c005a"]]}
-                      size={230}
-                      strokeWidth={8}
-                      onComplete={() => {
-                        setIsPlaying(false);
-                        handleTimerStop();
-                        return [false, 0]; // Stop the timer and reset to 0
-                      }}
-                    >
-                      {({ remainingTime }) => (
-                        <div className="text-4xl">
-                          {`${Math.floor(remainingTime / 60)
-                            .toString()
-                            .padStart(2, "0")}:${(remainingTime % 60)
-                            .toString()
-                            .padStart(2, "0")}`}
-                        </div>
-                      )}
-                    </CountdownCircleTimer>
-                  </div>
-                </div>
+                <div className="w-full h-64">
+                  <CountdownCircleTimer
+                    key={key}
+                    isPlaying={isPlaying}
+                    duration={selectedTime * 60} // 2 minutes
+                    colors={[["#3c005a"]]}
+                    size={230}
+                    strokeWidth={8}
+                    onComplete={() => {
+                      setIsPlaying(false);
+                      handleTimerStop();
+                      return [false, 0]; // Stop the timer and reset to 0
+                    }}
+                  >
+                    {({ remainingTime }) => (
+                      <div className="text-4xl">
+                        {`${Math.floor(remainingTime / 60)
+                          .toString()
+                          .padStart(2, "0")}:${(remainingTime % 60)
+                          .toString()
+                          .padStart(2, "0")}`}
+                      </div>
+                    )}
+                  </CountdownCircleTimer>
+                </div>
+                          
+              </div>
               <div
                 className="flex flex-col items-center justify-start pr-5 rounded w-full h-[900px]"
                 ref={chartRef}
@@ -742,7 +1009,7 @@ const [mediaStream, setMediaStream] = useState(null);
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-              <div className="flex justify-center">
+              <div className="flex flex-wrap justify-center">
                 <button
                   onClick={downloadAsPdf}
                   className={`
@@ -758,7 +1025,57 @@ const [mediaStream, setMediaStream] = useState(null);
                 >
                   {isPlaying ? "Cannot Download Chart" : "Download Chart"}
                 </button>
+                <center>
+  <form onSubmit={handleSubmit}>
+    <div>
+    <div style={{ display: 'none' }}>
+      <label>Start Date:</label>
+      <input
+        type="date"
+        value={startDate}
+        onChange={handleStartDateChange}
+      />
+      </div>
+    </div>
+    <div style={{ display: 'none' }}>
+      <label>End Date:</label>
+      <input
+        type="date"
+        value={endDate}
+        onChange={handleEndDateChange}
+      />
+    </div>
+    <div style={{ display: 'none' }}>
+      <label>Start Time:</label>
+      <input
+        type="text"
+        value={startTime}
+        onChange={handleStartTimeChange}
+      />
+    </div>
+    <div style={{ display: 'none' }}>
+      <label>End Time:</label>
+      <input
+        type="text"
+        value={endTime}
+        onChange={handleEndTimeChange}
+      />
+    </div>
+    <div>
+      <button className={`
+      w-full h-12 text-xl p-4 py-2 mt-[-6rem]
+      bg-gradient-to-r from-purple-500 to-blue-500
+      hover:from-purple-600 hover:to-blue-600
+      text-white font-bold mx-auto rounded-2xl
+      border-2 border-white
+      focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
+      transform hover:scale-105 transition-transform duration-300 ease-in-out
+    `} type="submit">Delete Chart</button>
+    </div>
+  </form>
+</center>
               </div>
+              <br></br>
               {prevAngle !== null && currentAngle !== null && (
                 <div className="flex justify-center mt-4">
                   <div className="mr-4">
@@ -776,14 +1093,60 @@ const [mediaStream, setMediaStream] = useState(null);
                 <div>
                   <strong>Maximum Angle:</strong> {maxAngle.toFixed(2)}°
                 </div>
-               
               </div>
-              
             </div>
           </div>
         </div>
       </div>
       {/* <Live/> */}
+      <center>
+      <div>
+      <button className={`
+      w-half h-12 text-xl p-4 py-2 mt-[-6rem]
+      bg-gradient-to-r from-purple-500 to-blue-500
+      hover:from-purple-600 hover:to-blue-600
+      text-white font-bold mx-auto rounded-2xl
+      border-2 border-white
+      focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
+      transform hover:scale-105 transition-transform duration-300 ease-in-out
+    `} onClick={handleButtonClick}>Show Chart</button>
+  
+      {isChartVisible && (
+        <div className="w-[800px] h-[400px]">
+          <br></br>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart
+              data={sdata.labels.map((label, index) => ({
+                name: label,
+                [sdata.datasets[0].name]: sdata.datasets[0].data[index],
+              }))}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Line
+                type="monotone"
+                dataKey={sdata.datasets[0].name}
+                stroke="aqua"
+                fill="aqua"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+          <div className="text-center">
+            <input
+              type="range"
+              min="0"
+              max={initialData.labels.length - 6}
+              value={progressbar}
+              onChange={handleProgressChange}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+    </center>
     </>
   );
 };

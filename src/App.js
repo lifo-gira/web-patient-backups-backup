@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import Diagno from "./Componenets/Diagno.jsx";
 import Live from "./Componenets/Live.jsx";
 import Test from "./Componenets/Test.jsx"
+import Static from "./Componenets/StaticGraph.jsx"
 
 function App() {
   const [status, setStatus] = useState(localStorage.getItem("isLoggedIn"));
@@ -18,6 +19,7 @@ function App() {
       <Route element={<Home />} path="/home" />
       <Route element={<Login />} path="/login" />
       <Route element={<Diagno />} path="/diagnostics" />
+      <Route element={<Static />} path="/static" />
       {/* <Route element={<Live />} path="/live" /> */}
     </Routes>
   );
