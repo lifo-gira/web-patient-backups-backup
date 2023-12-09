@@ -8,6 +8,7 @@ import Logo from "../assets/logo.png";
 import { useNavigate } from "react-router-dom";
 import DatePicker from "react-datepicker";
 import TimePicker from "react-time-picker";
+import html2pdf from 'html2pdf.js';
 import {
   CartesianGrid,
   Label,
@@ -33,6 +34,7 @@ import { MathUtils } from "three";
 // Your code using GLTFLoader goes here
 
 import { OrbitControls } from "@react-three/drei";
+import { func } from "prop-types";
 
 const Diagno = () => {
   const temp = [1, 2, 3];
@@ -56,6 +58,7 @@ const Diagno = () => {
   const [toDate, setToDate] = useState(new Date());
   const [toTime, setToTime] = useState("12:00");
   const [metricArray, setmetricArray] = useState([]);
+  const [isChartButtonClicked, setIsChartButtonClicked] = useState(false);
   const dotAppearance = isPlaying ? { fill: "yellow", r: 5 } : { fill: "none" };
   const [chartData, setChartData] = useState(
     Array.from({ length: 120 }, (_, i) => ({ index: i + 1, val: 0 }))
@@ -65,7 +68,7 @@ const Diagno = () => {
   // const [isRunning, setIsRunning] = useState(false);
   const [key, setKey] = useState(0);
   const [minAngle, setMinAngle] = useState(180);
-  const [maxAngle, setMaxAngle] = useState(180);
+  const [maxAngle, setMaxAngle] = useState(0);
   const [prevAngle, setPrevAngle] = useState(null);
   const [currentAngle, setCurrentAngle] = useState(null);
   const [minAnglePoint, setMinAnglePoint] = useState(null);
@@ -85,6 +88,8 @@ const Diagno = () => {
   const [stackedMetricsArray, setStackedMetricsArray] = useState([]);
   const timeIntervals = ["1", "1.5", "2"];
   const [staticFragment, setstaticFragment] = useState([]);
+  const [stackedIndex, setstackedIndex] = useState([]);
+  const [isStopButtonClicked, setIsStopButtonClicked] = useState(false);
   const handleFromDateTimeChange = (date, time) => {
     setFromDate(date);
     setFromTime(time);
@@ -124,10 +129,8 @@ const Diagno = () => {
   }
 const [legValue,setlegValue] = useState([])
   const generateNewDataPoint = () => {
-    // console.log(metricArray, "metricArraygraph");
-    // console.log(counter, "counter");
-    // console.log(metricArray.length, "no of elemetns");
     const newIndex = elapsedTime + 1;
+    
     if (counter >= 0 && counter < metricArray.length) {
       const metricItem = metricArray[counter];
       const legvalue = parseFloat(metricItem.val)
@@ -175,6 +178,8 @@ const [legValue,setlegValue] = useState([])
       const newDataPoint = generateNewDataPoint();
       if (newDataPoint) {
         const newAngle = newDataPoint.val;
+        // console.log(newAngle,counter)
+        processNewAngle(newDataPoint.val,newDataPoint.index);
         setPrevAngle(currentAngle); // Store the current angle as the previous angle
         setCurrentAngle(newAngle); // Update the current angle
         if (newAngle < minAngle) {
@@ -254,6 +259,8 @@ const [legValue,setlegValue] = useState([])
   }, [metrics]);
 
   const chartRef = useRef(null);
+  const [imageSrc, setImageSrc] = useState(null);
+  
   const downloadAsPdf = async () => {
     try {
       const chartContainer = chartRef.current;
@@ -263,17 +270,79 @@ const [legValue,setlegValue] = useState([])
       });
 
       const imgData = canvas.toDataURL("image/jpeg");
-
-      const pdf = new jsPDF();
-      const imgProps = pdf.getImageProperties(imgData);
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-      pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight);
-      pdf.save("chart.pdf");
+      setImageSrc(imgData);
+      // const pdf = new jsPDF();
+      // const imgProps = pdf.getImageProperties(imgData);
+      // const pdfWidth = pdf.internal.pageSize.getWidth();
+      // const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      // pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight);
+      // pdf.save("chart.pdf");
     } catch (error) {
       // console.error("Error generating PDF:", error);
     }
+  }
+
+  useEffect(() => {
+    // Trigger PDF generation when imageSrc is updated
+    if (imageSrc !== null) {
+      generatePdf();
+    }
+  }, [imageSrc]);
+
+    // new pdf generation
+    const [showNames, setShowNames] = useState(false);
+
+  const details = {
+    companyTitle: "Your Company",
+    patientName: "John Doe",
+    hospitalName: "Hospital XYZ",
+    date: "2023-11-30",
+    time: "10:00 AM",
+    loginId: "12345",
+    sensorId: "67890",
+    doctorName: "Dr. Smith",
+    assistantName: "Jane Doe",
+    graphImage: "path/to/graph.png",
   };
+
+  const handleShowNames = () => {
+    setShowNames(!showNames);
+  };
+
+  const generatePdf = () => {
+
+    const offScreenDiv = document.createElement("div");
+    downloadAsPdf();
+
+    const template = `
+      <div>
+        <h1>${details.companyTitle}</h1>
+        <p>Patient Name: ${details.patientName}</p>
+        <p>Hospital Name: ${details.hospitalName}</p>
+        <p>Date: ${details.date}</p>
+        <p>Time: ${details.time}</p>
+        <p>Login ID: ${details.loginId}</p>
+        <p>Sensor ID: ${details.sensorId}</p>
+        <p>Doctor Name: ${details.doctorName}</p>
+        <p>Assistant Name: ${details.assistantName}</p>
+        <br></br>
+        <img src="${imageSrc}" alt="Graph Image" style="width: 600px; height: 400px;" />
+      </div>
+    `;
+
+
+    offScreenDiv.innerHTML = template;
+
+
+    html2pdf(offScreenDiv, {
+      margin: 10,
+      filename: "details.pdf",
+      image: { type: "jpeg", quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+    });
+  };
+
 
   useEffect(() => {
     let interval;
@@ -325,7 +394,7 @@ const [legValue,setlegValue] = useState([])
 
   const startTimer = () => {
     // startRecording();
-
+    setIsStopButtonClicked(false);
     setIsPlaying(true);
     setKey((prevKey) => prevKey + 1);
     setCounter(-1);
@@ -349,7 +418,7 @@ const [legValue,setlegValue] = useState([])
       // seriesCount = Updated_data.length
       for (let i = 0; i < seriesCount.length; i += 20) {
         const slice = seriesCount.slice(i, i + seriesCount.length);
-        console.log(slice);
+        // console.log(slice);
         stackedMetricsArray.push(...slice);
         console.log(stackedMetricsArray, "STACKED");
         const mappedSlice = slice.map((val, index) => ({
@@ -411,6 +480,8 @@ const [legValue,setlegValue] = useState([])
   };
 
   const stopTimer = () => {
+    const jointAnalysisData = analyzeJointData(angles,times);
+    console.log(jointAnalysisData,"jointAnalysisData")
     setTargetRotation([0, 0, 0]);
     const endDateTime = new Date();
     setEndDate(endDateTime.toLocaleDateString()); // Update endDate
@@ -421,7 +492,7 @@ const [legValue,setlegValue] = useState([])
     console.log("Close Time:", formatTime(endDateTime));
     stopRecording();
     setIsPlaying(false);
-
+    setIsStopButtonClicked(true);
     setKey((prevKey) => prevKey + 1);
     handleTimerStop();
     flag = 0;
@@ -441,6 +512,7 @@ const [legValue,setlegValue] = useState([])
 
   const handleTimerStop = () => {
     setIsPlaying(false);
+    setIsStopButtonClicked(true);
     // setIsRunning(false); // Restart the timer
     setKey((prevKey) => prevKey + 1);
     setIsTimerRunning(false);
@@ -688,6 +760,131 @@ const [legValue,setlegValue] = useState([])
 
   const [targetRotation, setTargetRotation] = useState([0, 0, 0]);
 
+// for finding the cycles
+
+const [angles,setangles] = useState([]);
+const [times,settimes] = useState([]);
+let isSecondValueReceived = false;
+let temps=0
+let isFlexion = false;
+const [flexionCycles, setFlexionCycles] = useState(0);
+  const [extensionCycles, setExtensionCycles] = useState(0);
+  const [totalCycles, setTotalCycles] = useState(0);
+function processNewAngle(newAngle, newTime) {
+  let currentAngle = newAngle;
+
+  if (isSecondValueReceived) {
+      if (temps > currentAngle && !isFlexion) {
+          // Sign change to extension
+          isFlexion = true;
+          temps=currentAngle
+          cycleCount++;
+          flexionCycle++;
+      } else if (temps < currentAngle && isFlexion) {
+          // Sign change to flexion
+          isFlexion = false;
+          temps=currentAngle
+          cycleCount++;
+          extensionCycle++;
+      }
+      temps=newAngle
+      // Add the new angle to the array
+      angles.push(currentAngle);
+      times.push(newTime)
+      // Log the current state
+      setFlexionCycles(flexionCycle);
+    setExtensionCycles(extensionCycle);
+    setTotalCycles(cycleCount);
+  } else {
+      // Set the initial values for the first time
+      temps=newAngle
+      angles.push(currentAngle);
+      times.push(newTime)
+      isFlexion = currentAngle < newAngle; // Assuming the initial trend
+      // console.log("isFlexion", isFlexion);
+      isSecondValueReceived = true;
+  }
+}
+  // Real Functionality from python
+
+  let initialAngle = 0;
+  let initialTime = 0;
+  let cycleCount = 0;
+  let prevSignChange = null;
+  let flexionCycle = 0;
+  let extensionCycle = 0;
+  let flexionVelocities = [];
+  let extensionVelocities = [];
+  let minFlexionAngle = null;
+  let minExtensionAngle = null;
+
+  const analyzeJointData = (angles, times) => {
+    console.log(angles,"ANGLES")
+    console.log(times,"Times")
+
+    for (let i = 0; i < angles.length -1; i++) {
+      let change = angles[i] - angles[i + 1];
+
+      if (prevSignChange !== null && Math.sign(change) !== Math.sign(prevSignChange)) {
+        cycleCount++;
+
+        if (Math.sign(change) === -1) {
+          if (minFlexionAngle === null) {
+            flexionCycle++;
+            minFlexionAngle = initialAngle;
+            let maxFlexionAngle = angles[i];
+            minExtensionAngle = angles[i + 1];
+
+            if (maxFlexionAngle !== null && minFlexionAngle !== null) {
+              let flexionVelocity = -1 * (maxFlexionAngle - minFlexionAngle) / (times[i] - times[0]);
+              flexionVelocities.push(flexionVelocity);
+              initialTime = times[i + 1];
+            }
+          } else {
+            flexionCycle++;
+            let maxFlexionAngle = angles[i];
+            minExtensionAngle = angles[i + 1];
+
+            if (maxFlexionAngle !== null && minFlexionAngle !== null) {
+              let flexionVelocity = -1 * (maxFlexionAngle - minFlexionAngle) / (times[i] - initialTime);
+              flexionVelocities.push(flexionVelocity);
+              initialTime = times[i + 1];
+            }
+          }
+        } else {
+          if (minExtensionAngle === null) {
+            extensionCycle++;
+            minExtensionAngle = initialAngle;
+            let maxExtensionAngle = angles[i];
+            minFlexionAngle = angles[i + 1];
+
+            if (maxExtensionAngle !== null && minExtensionAngle !== null) {
+              let extensionVelocity = (maxExtensionAngle - minExtensionAngle) / (times[i] - initialTime);
+              extensionVelocities.push(extensionVelocity);
+              initialTime = times[i + 1];
+            }
+          } else {
+            extensionCycle++;
+            let maxExtensionAngle = angles[i];
+            minFlexionAngle = angles[i + 1];
+
+            if (maxExtensionAngle !== null && minExtensionAngle !== null) {
+              let extensionVelocity = (maxExtensionAngle - minExtensionAngle) / (times[i] - initialTime);
+              extensionVelocities.push(extensionVelocity);
+              initialTime = times[i + 1];
+            }
+          }
+        }
+      }
+
+      prevSignChange = change;
+    }
+    return {
+      flexionVelocities,
+      extensionVelocities,
+    };
+  };
+
 
   return (
     <>
@@ -877,7 +1074,7 @@ const [legValue,setlegValue] = useState([])
         </div>
 
         {/* Glass Morphic Section */}
-        <div className="w-3/4 h-[95rem] my-8 relative border-1 bg-opacity-30 bg-white shadow-xl backdrop-blur-3xl backdrop-brightness-90 rounded-3xl">
+        <div className="w-3/4 h-[105rem] my-8 relative border-1 bg-opacity-30 bg-white shadow-xl backdrop-blur-3xl backdrop-brightness-90 rounded-3xl">
           {/* Toggle Button (Top Left) */}
           <button
             className={`m-2 flex items-center justify-center w-20 h-20 rounded-full bg-blue-500 text-white ${
@@ -1011,7 +1208,7 @@ const [legValue,setlegValue] = useState([])
               </div>
               <div className="flex flex-wrap justify-center">
                 <button
-                  onClick={downloadAsPdf}
+                  onClick={generatePdf}
                   className={`
       w-full h-12 text-xl p-4 py-2 mt-[-6rem]
       bg-gradient-to-r from-purple-500 to-blue-500
@@ -1094,58 +1291,76 @@ const [legValue,setlegValue] = useState([])
                   <strong>Maximum Angle:</strong> {maxAngle.toFixed(2)}°
                 </div>
               </div>
+              <div>
+        <h2>Cycle Information:</h2>
+        <p>Flexion Cycles: {flexionCycles}</p>
+        <p>Extension Cycles: {extensionCycles}</p>
+        <p>Total Cycles: {totalCycles}</p>
+      </div>
             </div>
           </div>
         </div>
       </div>
       {/* <Live/> */}
       <center>
-      <div>
-      <button className={`
-      w-half h-12 text-xl p-4 py-2 mt-[-6rem]
-      bg-gradient-to-r from-purple-500 to-blue-500
-      hover:from-purple-600 hover:to-blue-600
-      text-white font-bold mx-auto rounded-2xl
-      border-2 border-white
-      focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
-      transform hover:scale-105 transition-transform duration-300 ease-in-out
-    `} onClick={handleButtonClick}>Show Chart</button>
-  
-      {isChartVisible && (
-        <div className="w-[800px] h-[400px]">
-          <br></br>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={sdata.labels.map((label, index) => ({
-                name: label,
-                [sdata.datasets[0].name]: sdata.datasets[0].data[index],
-              }))}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey={sdata.datasets[0].name}
-                stroke="aqua"
-                fill="aqua"
-              />
-            </LineChart>
-          </ResponsiveContainer>
-          <div className="text-center">
-            <input
-              type="range"
-              min="0"
-              max={initialData.labels.length - 6}
-              value={progressbar}
-              onChange={handleProgressChange}
+      {!isPlaying && (
+  <>
+    <button
+      className={`
+        w-half h-12 text-xl p-4 py-2 mt-[-6rem]
+        bg-gradient-to-r from-purple-500 to-blue-500
+        hover:from-purple-600 hover:to-blue-600
+        text-white font-bold mx-auto rounded-2xl
+        border-2 border-white
+        focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
+        transform hover:scale-105 transition-transform duration-300 ease-in-out
+      `}
+      onClick={() => {
+        handleButtonClick();
+        setIsChartButtonClicked(true);
+      }}
+      disabled={!isStopButtonClicked}
+    >
+      {isChartButtonClicked ? 'Chart Shown' : 'Show Chart'}
+    </button>
+
+    {isChartVisible && (
+      <div className="w-[800px] h-[400px]">
+        <br></br>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart
+            data={sdata.labels.map((label, index) => ({
+              name: label,
+              [sdata.datasets[0].name]: sdata.datasets[0].data[index],
+            }))}
+          >
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="name" />
+            <YAxis />
+            <Tooltip />
+            <Legend />
+            <Line
+              type="monotone"
+              dataKey={sdata.datasets[0].name}
+              stroke="aqua"
+              fill="aqua"
             />
-          </div>
+          </LineChart>
+        </ResponsiveContainer>
+        <div className="text-center">
+          <input
+            type="range"
+            min="0"
+            max={initialData.labels.length - 6}
+            value={progressbar}
+            onChange={handleProgressChange}
+          />
         </div>
-      )}
-    </div>
+      </div>
+    )}
+  </>
+)}
+
     </center>
     </>
   );
